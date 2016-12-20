@@ -1,0 +1,52 @@
+version: '2'
+
+services:
+      
+  proxy:
+    # this receives outside http/https traffic and
+    # routes it to services in the SDN, it also
+    # sets up SSL and offer the only open ports to
+    # the outside - 80 and 443, we configure it
+    # with a dnddock alias to allow testing it easily from the
+    # host machine running these docker services
+    image: jwilder/nginx-proxy
+    environment:
+      - DNSDOCK_ALIAS=qos.docker
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  dnsdock:
+    # for this to work, the host machine needs /etc/resolvconf configs
+    # see instructions at https://github.com/mskyttner/dns-test-docker
+    # the aacebedo image is an update of tonistiigi/dnsdock:amd64-1.13.1
+    # which has Dockerfile and docs available at Docker Hub
+    # (note the static ip on the docker bridge)
+    image: aacebedo/dnsdock:v1.15.0-amd64
+    ports:
+      - 172.17.0.1:53:53/udp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  web:
+    # this is "routing" all web traffic and knows
+    # all other services in the SDN by their 
+    # docker-compose names which are used in the app.conf file
+    image: nginx:alpine
+    environment: 
+      - VIRTUAL_HOST=qos.docker
+    volumes:
+      - ./app.conf:/etc/nginx/conf.d/app.conf
+
+  fast:
+    image: dina/fast
+    container_name: fast
+
+  slow:
+    image: dina/slow
+    container_name: slow
+    cap_add:
+      - NET_ADMIN
+
